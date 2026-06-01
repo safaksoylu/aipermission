@@ -1,0 +1,37 @@
+.env
+.DS_Store
+
+# Go
+backend/bin/
+backend/tmp/
+backend/coverage.out
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
+packages/mcp/node_modules/
+packages/mcp/dist/
+packages/mcp/coverage/
+coverage/
+
+# Docs
+docs/.obsidian/
+
+# Local data
+data/
+*.db
+*.db-shm
+*.db-wal
+*.aipdb
+*.aipbackup
+gateway.secret
+known_hosts
+*.pem
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*

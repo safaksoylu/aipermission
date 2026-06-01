@@ -1,0 +1,26 @@
+{
+  "name": "aipermission",
+  "version": "0.0.3",
+  "description": "Placeholder package for AIPermission. Use @aipermission/mcp.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://github.com/aipermission/aipermission#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aipermission/aipermission.git",
+    "directory": "packages/npm-placeholder"
+  },
+  "bugs": {
+    "url": "https://github.com/aipermission/aipermission/issues"
+  },
+  "bin": {
+    "aipermission": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

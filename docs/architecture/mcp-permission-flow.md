@@ -1,0 +1,74 @@
+# MCP Permission Flow
+
+An MCP client connects to the gateway with an API token. The AI assistant never sees SSH credentials; it only sees the limited MCP tool surface exposed by the local gateway.
+
+The local UI also has a global MCP Started/Stopped switch for the active
+database runtime. Saved token/server permissions stay in the database, but new
+MCP command execution is blocked while the runtime is stopped. This prevents a
+gateway restart from automatically making old `always_run` grants live again.
+
+Current MCP tools:
+
+```txt
+list_servers()
+exec(server_id, command, reason?)
+get_request(request_id)
+list_requests(status?)
+read_console(server_id, tail?)
+send_message(message, server_id?, session_id?)
+```
+
+For the detailed tool contract, see [MCP Tools](../api/mcp-tools.md).
+
+## list_servers
+
+`list_servers()` returns only the servers that the token can access.
+
+Example:
+
+```json
+[
+  {
+    "id": 3,
+    "name": "core-1",
+    "execution_rule": "approval_required"
+  }
+]
+```
+
+## exec
+
+Example call:
+
+```txt
+exec(3, "ls", "Inspect the current directory")
+```
+
+Gateway flow:
+
+1. Validate the API token.
+2. Reject revoked tokens.
+3. Check whether the token has permission for server `3`.
+4. Read the execution rule.
+5. Check whether the global MCP runtime is started.
+6. If the runtime is stopped, return `stopped`.
+7. If the rule is `always_run`, run the command directly.
+8. If the rule is `approval_required`, create a pending approval.
+9. If the rule is `blocked`, reject the command without execution.
+10. Return the result or a follow-up `request_id` to the MCP client.
+
+## Approval Required
+
+Approval-required MCP requests are non-blocking. The gateway stores the command request as `pending_approval` and returns `approval_pending` plus `request_id`. The user decides in the web UI:
+
+- Run
+- Decline
+- Add a note
+
+When the user runs the request, the backend executes the command in the target server's persistent console session. The AI follows progress with `get_request(request_id)`. `read_console(server_id)` is reserved for tokens with `always_run` permission so approval-only tokens cannot read unrelated manual console transcripts.
+
+The approval note is stored as `user_note` on that command request and returned by `get_request`.
+
+The live message queue is separate. A user can send a message from the Console UI; the gateway injects it as `user_note` into the next matching MCP response.
+
+For credential rules, see [Credential Boundary](../security/credential-boundary.md).

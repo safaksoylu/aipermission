@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">aipermission icon</title>
+  <desc id="desc">A permission shield containing a console prompt and AI text.</desc>
+  <g transform="translate(128 128) scale(1.15) translate(-128 -128)">
+    <path
+      d="M128 31 202 62v53c0 50-28 86-74 109-46-23-74-59-74-109V62l74-31Z"
+      fill="#064e3b"
+      stroke="#38bd99"
+      stroke-linejoin="round"
+      stroke-width="14"
+    />
+    <g fill="#f7f7f4">
+      <path d="m 84.205,123.681 14.847,-6.027 -14.847,-6.762 v -7.105 l 24.206,12.103 v 4.116 l -24.206,10.731 z" />
+      <path d="m 136.235,135 -1.715,-6.566 H 123.152 L 121.388,135 H 111 L 122.417,99.867 H 135.01 L 146.574,135 Z m -5.194,-20.041 q -0.245,-0.931 -0.686,-2.646 -0.441,-1.764 -0.882,-3.626 -0.441,-1.862 -0.686,-3.038 -0.196,1.176 -0.637,2.94 -0.392,1.764 -0.833,3.479 -0.392,1.715 -0.686,2.891 l -1.519,5.733 h 7.448 z" />
+      <rect x="152" y="95" width="8" height="46" />
+    </g>
+  </g>
+</svg>

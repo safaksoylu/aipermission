@@ -1,0 +1,43 @@
+{
+  "name": "@aipermission/mcp",
+  "version": "0.1.0",
+  "mcpName": "io.github.aipermission/aipermission-mcp",
+  "description": "Local-first MCP bridge for the aipermission gateway.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://github.com/aipermission/aipermission/tree/main/packages/mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aipermission/aipermission.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/aipermission/aipermission/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "aipermission-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "prepack": "npm run build",
+    "test": "node --test test/*.test.js",
+    "start": "node dist/cli.js",
+    "dev": "node src/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "3.25.76"
+  }
+}

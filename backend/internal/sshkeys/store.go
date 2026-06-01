@@ -1,0 +1,247 @@
+package sshkeys
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/rsa"
+	"database/sql"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/aipermission/aipermission/backend/internal/vault"
+	"golang.org/x/crypto/ssh"
+)
+
+const (
+	TypeED25519 = "ed25519"
+	TypeRSA     = "rsa"
+)
+
+type SSHKey struct {
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	KeyType        string `json:"key_type"`
+	PublicKey      string `json:"public_key"`
+	Fingerprint    string `json:"fingerprint"`
+	InstallCommand string `json:"install_command"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+}
+
+type CreateRequest struct {
+	Name    string `json:"name"`
+	KeyType string `json:"key_type"`
+}
+
+type privateKeySecret struct {
+	PrivateKey string `json:"private_key"`
+}
+
+type PrivateKey struct {
+	ID         int64
+	Name       string
+	KeyType    string
+	PrivateKey string
+}
+
+type Store struct {
+	db    *sql.DB
+	vault *vault.Vault
+}
+
+func NewStore(db *sql.DB, vault *vault.Vault) *Store {
+	return &Store{db: db, vault: vault}
+}
+
+func (s *Store) List(ctx context.Context) ([]SSHKey, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, key_type, public_key, fingerprint, created_at, updated_at FROM ssh_keys ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("list ssh keys: %w", err)
+	}
+	defer rows.Close()
+
+	items := []SSHKey{}
+	for rows.Next() {
+		var item SSHKey
+		if err := rows.Scan(&item.ID, &item.Name, &item.KeyType, &item.PublicKey, &item.Fingerprint, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan ssh key: %w", err)
+		}
+		item.InstallCommand = InstallCommand(item.PublicKey)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate ssh keys: %w", err)
+	}
+	return items, nil
+}
+
+func (s *Store) Get(ctx context.Context, id int64) (SSHKey, error) {
+	var item SSHKey
+	err := s.db.QueryRowContext(ctx, `SELECT id, name, key_type, public_key, fingerprint, created_at, updated_at FROM ssh_keys WHERE id = ?`, id).
+		Scan(&item.ID, &item.Name, &item.KeyType, &item.PublicKey, &item.Fingerprint, &item.CreatedAt, &item.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SSHKey{}, ErrNotFound
+	}
+	if err != nil {
+		return SSHKey{}, fmt.Errorf("get ssh key: %w", err)
+	}
+	item.InstallCommand = InstallCommand(item.PublicKey)
+	return item, nil
+}
+
+func (s *Store) GetPrivateKey(ctx context.Context, id int64) (PrivateKey, error) {
+	var encrypted string
+	var item PrivateKey
+	err := s.db.QueryRowContext(ctx, `SELECT id, name, key_type, encrypted_private_key FROM ssh_keys WHERE id = ?`, id).
+		Scan(&item.ID, &item.Name, &item.KeyType, &encrypted)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PrivateKey{}, ErrNotFound
+	}
+	if err != nil {
+		return PrivateKey{}, fmt.Errorf("get private ssh key: %w", err)
+	}
+
+	var secret privateKeySecret
+	if err := s.vault.DecryptJSON(encrypted, &secret); err != nil {
+		return PrivateKey{}, err
+	}
+	item.PrivateKey = secret.PrivateKey
+	return item, nil
+}
+
+func (s *Store) Create(ctx context.Context, request CreateRequest) (SSHKey, error) {
+	request.Name = strings.TrimSpace(request.Name)
+	request.KeyType = strings.TrimSpace(request.KeyType)
+	if request.Name == "" {
+		return SSHKey{}, ValidationError("name is required")
+	}
+	if err := validateName(request.Name); err != nil {
+		return SSHKey{}, err
+	}
+	if request.KeyType == "" {
+		request.KeyType = TypeED25519
+	}
+
+	privateKey, publicKey, fingerprint, err := generateKey(request.Name, request.KeyType)
+	if err != nil {
+		return SSHKey{}, err
+	}
+
+	encrypted, err := s.vault.EncryptJSON(privateKeySecret{PrivateKey: privateKey})
+	if err != nil {
+		return SSHKey{}, err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.ExecContext(
+		ctx,
+		`INSERT INTO ssh_keys (name, key_type, public_key, encrypted_private_key, fingerprint, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		request.Name,
+		request.KeyType,
+		publicKey,
+		encrypted,
+		fingerprint,
+		now,
+		now,
+	)
+	if err != nil {
+		if isUniqueConstraintError(err) {
+			return SSHKey{}, ValidationError("ssh key name already exists")
+		}
+		return SSHKey{}, fmt.Errorf("create ssh key: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return SSHKey{}, fmt.Errorf("read ssh key id: %w", err)
+	}
+	return s.Get(ctx, id)
+}
+
+func validateName(name string) error {
+	if len([]rune(name)) > 80 {
+		return ValidationError("name must be 80 characters or fewer")
+	}
+	for _, r := range name {
+		if !unicode.IsPrint(r) || r == '\r' || r == '\n' {
+			return ValidationError("name must be printable and single-line")
+		}
+	}
+	return nil
+}
+
+func (s *Store) Delete(ctx context.Context, id int64) error {
+	var usageCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM servers WHERE ssh_key_id = ?`, id).Scan(&usageCount); err != nil {
+		return fmt.Errorf("check ssh key usage: %w", err)
+	}
+	if usageCount > 0 {
+		return ValidationError("ssh key is used by one or more servers")
+	}
+
+	result, err := s.db.ExecContext(ctx, `DELETE FROM ssh_keys WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete ssh key: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read rows affected: %w", err)
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func generateKey(name string, keyType string) (string, string, string, error) {
+	comment := "aipermission-" + name
+
+	switch keyType {
+	case TypeED25519:
+		public, private, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return "", "", "", fmt.Errorf("generate ed25519 key: %w", err)
+		}
+		return marshalKey(private, public, comment)
+	case TypeRSA:
+		private, err := rsa.GenerateKey(rand.Reader, 4096)
+		if err != nil {
+			return "", "", "", fmt.Errorf("generate rsa key: %w", err)
+		}
+		return marshalKey(private, &private.PublicKey, comment)
+	default:
+		return "", "", "", ValidationError("key_type must be ed25519 or rsa")
+	}
+}
+
+func marshalKey(private any, public any, comment string) (string, string, string, error) {
+	privateBlock, err := ssh.MarshalPrivateKey(private, comment)
+	if err != nil {
+		return "", "", "", fmt.Errorf("marshal private key: %w", err)
+	}
+	privateKey := string(pem.EncodeToMemory(privateBlock))
+
+	sshPublic, err := ssh.NewPublicKey(public)
+	if err != nil {
+		return "", "", "", fmt.Errorf("marshal public key: %w", err)
+	}
+	publicKey := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPublic))) + " " + comment
+	fingerprint := ssh.FingerprintSHA256(sshPublic)
+	return privateKey, publicKey, fingerprint, nil
+}
+
+func InstallCommand(publicKey string) string {
+	return fmt.Sprintf(`mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%%s\n' %s >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`, shellQuote(publicKey))
+}
+
+func isUniqueConstraintError(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "unique")
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}

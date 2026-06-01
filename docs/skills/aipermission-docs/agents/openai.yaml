@@ -1,0 +1,4 @@
+interface:
+  display_name: "aipermission Docs"
+  short_description: "Maintain aipermission project documentation."
+  default_prompt: "Use this skill when documenting aipermission architecture, MVP scope, API/MCP behavior, Docker runtime, security boundaries, or implementation roadmap."

@@ -1,0 +1,48 @@
+- name: bug
+  color: d73a4a
+  description: Something is broken or behaves incorrectly.
+- name: enhancement
+  color: a2eeef
+  description: Product improvement that fits the project principles.
+- name: documentation
+  color: 0075ca
+  description: README, docs, examples, or setup guidance.
+- name: security review
+  color: b60205
+  description: Security-sensitive review, hardening, or threat-model discussion.
+- name: local-only
+  color: 0e8a16
+  description: Issues touching the localhost-only boundary.
+- name: question
+  color: d876e3
+  description: Support or clarification request.
+- name: wontfix
+  color: 000000
+  description: Intentionally out of scope or conflicts with project principles.
+- name: duplicate
+  color: cfd3d7
+  description: Already tracked elsewhere.
+- name: good first issue
+  color: 7057ff
+  description: Small, low-risk contribution for new contributors.
+- name: help wanted
+  color: 008672
+  description: Maintainers welcome community implementation help.
+- name: maintenance
+  color: fef2c0
+  description: Refactor, cleanup, dependency, CI, or release chores.
+- name: ui
+  color: 1d76db
+  description: Frontend/user-experience changes.
+- name: mcp
+  color: 5319e7
+  description: MCP package, client setup, or MCP protocol behavior.
+- name: backend
+  color: fbca04
+  description: Go backend/API/storage/execution changes.
+- name: frontend
+  color: 0e8a16
+  description: React frontend changes.
+- name: docs
+  color: 0075ca
+  description: Documentation-only work.

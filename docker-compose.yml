@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: aipermission-backend
+    environment:
+      AIPERMISSION_BACKEND_HOST: 127.0.0.1
+      AIPERMISSION_BACKEND_PORT: 8080
+      AIPERMISSION_DATA_PATH: /app/data/aipermission.db
+      AIPERMISSION_GATEWAY_SECRET: ${AIPERMISSION_GATEWAY_SECRET:-dev-only-change-me}
+      AIPERMISSION_FRONTEND_PORT: ${AIPERMISSION_FRONTEND_PORT:-3210}
+      AIPERMISSION_ALLOWED_ORIGINS: ${AIPERMISSION_ALLOWED_ORIGINS:-}
+    network_mode: "service:frontend"
+    volumes:
+      - aipermission_data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ""
+        VITE_MCP_API_URL: ${AIPERMISSION_MCP_API_URL:-}
+    container_name: aipermission-frontend
+    ports:
+      - "127.0.0.1:${AIPERMISSION_FRONTEND_PORT:-3210}:3210"
+
+volumes:
+  aipermission_data:

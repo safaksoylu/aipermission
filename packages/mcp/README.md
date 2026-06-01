@@ -1,0 +1,84 @@
+# @aipermission/mcp
+
+Local-first MCP bridge for the AIPermission gateway.
+
+AIPermission lets AI coding assistants use scoped server access through a local gateway without receiving SSH private keys or server credentials.
+
+The gateway is intentionally local-only. Run it on the developer machine and keep the URL on `localhost`; remote servers are SSH targets, not places to host the gateway for LAN or internet users.
+
+`@aipermission/mcp` is the official MCP bridge package. The unscoped `aipermission` npm package is only a placeholder that points users here.
+
+The package includes MCP Registry metadata:
+
+- `mcpName` in `package.json`
+- `server.json` with the npm stdio package declaration
+
+## Install
+
+```bash
+npx -y @aipermission/mcp init \
+  --provider codex \
+  --name aipermission
+```
+
+The init command prompts for your AIPermission API token and writes the MCP client configuration for the selected provider.
+
+The generated MCP config contains a bearer token. Keep it private. For project-local configs such as `.mcp.json`, `.cursor/mcp.json`, and `.vscode/mcp.json`, the init command refuses to write into files already tracked by Git unless `--force` is passed. For untracked project-local configs, it adds the file to `.git/info/exclude` when it detects a Git repository. Use `--print` if you prefer to copy the config manually. If a token config is committed or shared, revoke that token in the AIPermission UI.
+
+## Manual Config
+
+```json
+{
+  "mcpServers": {
+    "aipermission": {
+      "command": "npx",
+      "args": ["-y", "@aipermission/mcp"],
+      "env": {
+        "NODE_ENV": "production",
+        "AIPERMISSION_API_URL": "http://localhost:3210",
+        "AIPERMISSION_API_TOKEN": "YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}
+```
+
+## Tools
+
+- `list_servers`
+- `exec`
+- `get_request`
+- `list_requests`
+- `read_console`
+- `send_message`
+
+`exec` is intended for non-interactive commands. The gateway closes stdin for MCP command bodies so stdin-reading commands cannot consume the internal shell wrapper. Use the web console for interactive work.
+
+## Operator Skill
+
+Install the optional AIPermission operator instructions for your AI client:
+
+```bash
+npx -y @aipermission/mcp install-skill --client codex
+```
+
+Supported clients:
+
+- `codex`: `~/.codex/skills/aipermission-operator/SKILL.md`
+- `claude-code`: `.claude/rules/aipermission-operator.md`
+- `cursor`: `.cursor/rules/aipermission-operator.mdc`
+- `vscode`: `.github/instructions/aipermission-operator.instructions.md`
+- `windsurf`: `.windsurf/rules/aipermission-operator.md`
+- `antigravity`: `.agents/rules/aipermission-operator.md`
+- `gemini`: `GEMINI.md`
+- `custom`: prints portable Markdown to stdout
+
+These instructions teach the agent how to poll `approval_pending` and `running` requests, read live console output, write short reasons, and avoid printing secrets. The default installer uses the operator instruction bundled in the npm package; `--source` accepts local file paths only and rejects HTTP(S) sources.
+
+## Security Boundary
+
+This package talks to a local AIPermission gateway. `AIPERMISSION_API_URL` must point to `localhost`, `127.0.0.1`, or `[::1]`; remote URLs are rejected before the bearer token is sent. Do not expose the gateway on LAN or the public internet, and do not use it as a shared DevOps service. Tokens grant access only to the servers and execution rules configured in the gateway UI.
+
+## License
+
+MIT

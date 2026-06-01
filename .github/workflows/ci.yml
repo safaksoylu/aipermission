@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  security-hygiene:
+    name: Security Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Secret scan
+        run: node scripts/secret-scan.js
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.25.10"
+          cache-dependency-path: backend/go.sum
+      - name: Test
+        working-directory: backend
+        run: go test ./...
+      - name: Race test
+        working-directory: backend
+        run: go test -race ./...
+      - name: Vet
+        working-directory: backend
+        run: go vet ./...
+      - name: Govulncheck
+        working-directory: backend
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: Test
+        working-directory: frontend
+        run: npm test
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke
+        working-directory: frontend
+        run: npm run test:e2e
+      - name: Audit
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=moderate
+
+  mcp:
+    name: MCP Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/mcp/package-lock.json
+      - name: Install
+        working-directory: packages/mcp
+        run: npm ci
+      - name: Test
+        working-directory: packages/mcp
+        run: npm test
+      - name: Build
+        working-directory: packages/mcp
+        run: npm run build
+      - name: Audit
+        working-directory: packages/mcp
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Pack dry run
+        working-directory: packages/mcp
+        run: npm pack --dry-run
+
+  docs:
+    name: Docs Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Reject local Obsidian workspace files
+        run: test -z "$(git ls-files docs/.obsidian)"
+
+  npm-placeholder:
+    name: NPM Placeholder Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Pack dry run
+        working-directory: packages/npm-placeholder
+        run: npm pack --dry-run
+
+  container-scan:
+    name: Container Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Build images
+        run: docker compose build backend frontend
+      - name: Trivy backend scan (advisory)
+        continue-on-error: true
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.63.0@sha256:6fb0646988fcd2fdf7bf123f7174945ebc2c9c72d1fa1567c8d7daeeb70f8037 image --severity HIGH,CRITICAL --ignore-unfixed aipermission-backend:latest
+      - name: Trivy frontend scan (advisory)
+        continue-on-error: true
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.63.0@sha256:6fb0646988fcd2fdf7bf123f7174945ebc2c9c72d1fa1567c8d7daeeb70f8037 image --severity HIGH,CRITICAL --ignore-unfixed aipermission-frontend:latest

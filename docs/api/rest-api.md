@@ -1,0 +1,407 @@
+# REST API
+
+This document tracks the public-ish REST surface used by the web UI and MCP bridge. The API is local-only and assumes the encrypted database has been unlocked unless the endpoint is part of setup/unlock.
+
+The web REST API is not a remote multi-user API. After database unlock, protected web REST endpoints require a local HttpOnly browser session cookie. Mutating web REST requests also send a double-submit CSRF header/cookie pair. MCP endpoints do not use that cookie; they authenticate with API tokens.
+
+## Error Shape
+
+Errors use a JSON object:
+
+```json
+{
+  "error": "message"
+}
+```
+
+Request bodies reject unknown fields where structured decoding is used.
+
+## Health And Unlock
+
+```txt
+GET  /health
+GET  /api/status
+GET  /api/unlock/status
+POST /api/unlock/setup
+POST /api/unlock
+POST /api/backup/import
+POST /api/databases/switch
+POST /api/databases/rename
+POST /api/databases/delete
+POST /api/databases/change-password
+POST /api/lock
+```
+
+`/health` is a lightweight process health check and does not require an unlocked database.
+
+`/api/status` returns public gateway status and configuration shape for the web UI. It does not expose local database file paths.
+
+Most `/api/*` application endpoints return `423 Locked` until a database is unlocked. Setup/import/unlock endpoints remain available while locked. After a database is unlocked, protected web REST endpoints return `401 Unauthorized` if the local browser session cookie is missing or invalid.
+
+Database unlock is process state. Closing the browser does not lock the backend. If the browser session cookie is deleted or expires while the backend remains unlocked, `GET /api/unlock/status` returns `state: "session_required"` and the UI asks for the same database password to issue a new session cookie. Unlock status lists database IDs/names/states for the UI, but omits local filesystem paths. `Switch` can move the UI context to another already-unlocked database without stopping work in the previous workspace.
+
+If a target database is locked, `switch` requires its password. If the same API token exists in more than one unlocked database, MCP authentication returns `409 Conflict`.
+
+## Servers
+
+```txt
+GET    /api/servers
+POST   /api/servers
+GET    /api/servers/{id}
+PUT    /api/servers/{id}
+DELETE /api/servers/{id}
+POST   /api/servers/{id}/test
+POST   /api/servers/test-connection
+POST   /api/ssh-host-keys/approve
+```
+
+Server responses never include SSH private keys or decrypted credential payloads.
+
+Create/update shape:
+
+```json
+{
+  "name": "worker-2",
+  "host": "159.69.12.186",
+  "port": 22,
+  "username": "root",
+  "ssh_key_id": 7,
+  "description": "maintenance target"
+}
+```
+
+Server-specific custom hints are not accepted by the server CRUD API in the current MVP. MCP `list_servers` may still return gateway-generated operational hints, such as safe package verification or bounded log commands.
+
+`POST /api/servers/test-connection` tests an unsaved form payload before save, unless the user chooses to set up the server later.
+
+If a test or SSH-backed action reaches an unknown host key, the backend returns:
+
+```json
+{
+  "error": "ssh host key approval required",
+  "code": "unknown_ssh_host_key",
+  "host_key": {
+    "host": "159.69.12.186",
+    "port": 22,
+    "hostname": "159.69.12.186:22",
+    "key_type": "ssh-ed25519",
+    "fingerprint_sha256": "SHA256:...",
+    "public_key": "BASE64_HOST_PUBLIC_KEY"
+  }
+}
+```
+
+The UI asks the user to verify and approve the fingerprint. `POST /api/ssh-host-keys/approve` records the key in the local `known_hosts` file.
+
+`DELETE /api/servers/{id}` deletes only the local record.
+
+`DELETE /api/servers/{id}?remove_key=true` first connects with the server's gateway key, removes remote `~/.ssh/authorized_keys` entries containing that public key blob, then deletes the local record. This handles changed comments or authorized_keys options. If remote cleanup fails or removes zero entries, the local record is kept.
+
+## SSH Keys
+
+```txt
+GET    /api/ssh-keys
+POST   /api/ssh-keys
+GET    /api/ssh-keys/{id}
+DELETE /api/ssh-keys/{id}
+```
+
+Create shape:
+
+```json
+{
+  "name": "main",
+  "key_type": "ed25519"
+}
+```
+
+Supported `key_type` values:
+
+```txt
+ed25519
+rsa
+```
+
+Response may include public key, fingerprint, and install command. It must not include the private key.
+
+## Tokens
+
+```txt
+GET    /api/tokens
+POST   /api/tokens
+POST   /api/tokens/{id}/revoke
+GET    /api/tokens/{id}/permissions
+PUT    /api/tokens/{id}/permissions
+GET    /api/settings/security
+PUT    /api/settings/security
+GET    /api/settings/retention
+PUT    /api/settings/retention
+POST   /api/settings/retention/purge
+GET    /api/settings/redaction-rules
+POST   /api/settings/redaction-rules
+PUT    /api/settings/redaction-rules/{id}
+DELETE /api/settings/redaction-rules/{id}
+```
+
+Token create returns the token value once. `expires_at` is optional and must be
+an RFC3339 timestamp in the future when present:
+
+```json
+{
+  "name": "codex-maintenance",
+  "expires_at": "2026-06-01T14:00:00Z"
+}
+```
+
+`GET /api/tokens` does not return token values by default. If reusable token
+copy is enabled in Security, token values created after that setting is enabled
+are stored encrypted and can be returned for UI copy. Revoked or expired tokens
+are rejected by MCP endpoints.
+
+Security settings:
+
+```json
+{
+  "reusable_tokens": false,
+  "expose_mcp_server_metadata": false,
+  "redaction_mode": "basic"
+}
+```
+
+`expose_mcp_server_metadata` controls whether MCP `list_servers` includes `host`, `port`, and `username`. `redaction_mode` is `basic` or `off`; basic redaction masks common token/password/API-key/private-key patterns before command history, console transcripts, and audit payloads are persisted or returned through MCP. Approval execution stores a separate encrypted raw command payload internally so the approved command still runs exactly as submitted while UI/history/audit display fields remain redacted.
+
+When `redaction_mode` is `basic`, custom redaction rules can be added on top of the built-in patterns:
+
+```json
+{
+  "name": "Internal token",
+  "pattern": "(?i)internal_[a-z0-9]{24,}",
+  "enabled": true
+}
+```
+
+Patterns use Go RE2 syntax, are limited in size, and replace matches with `[REDACTED]`. Custom rules are stored in the encrypted database and move with `.aipdb` backups/imports.
+
+Retention settings:
+
+```json
+{
+  "history_days": 0,
+  "audit_days": 0,
+  "console_days": 0,
+  "message_days": 0
+}
+```
+
+`0` disables automatic cleanup for that category. Cleanup runs when a database is unlocked and immediately after retention settings are saved. `POST /api/settings/retention/purge` runs a one-time manual purge:
+
+```json
+{
+  "target": "history",
+  "days": 30
+}
+```
+
+Valid targets are `history`, `audit`, `console`, and `messages`.
+
+Permission update shape:
+
+```json
+{
+  "permissions": [
+    {
+      "server_id": 3,
+      "execution_rule": "approval_required"
+    }
+  ]
+}
+```
+
+Supported execution rules:
+
+```txt
+always_run
+approval_required
+blocked
+```
+
+`PUT` replaces the full permission set for the token. Servers not included are inaccessible to that token.
+
+Permissions can be edited from the Console token panel or from the Tokens page dot/dialog flow.
+
+## Backup And Import
+
+```txt
+GET  /api/backup/download
+POST /api/backup/import
+```
+
+`GET /api/backup/download` returns the active SQLCipher database as a binary `.aipdb` file. The backend creates a temporary SQLCipher snapshot and serves that snapshot instead of streaming the live database file directly.
+
+`POST /api/backup/import` should use `multipart/form-data`:
+
+```txt
+sqlite=<database file>
+database_name=Project Alpha
+database_password=DATABASE_PASSWORD
+```
+
+The multipart field name `file` is accepted as a compatibility alias, but the UI and current examples use `sqlite`. JSON/base64 database import is not supported; use multipart so the backend can stream the uploaded file to a temporary encrypted import path.
+
+Import can run while locked. The backend validates the uploaded database with the provided password, stores it as a named local database, and unlocks it. Import never overwrites an existing database file; colliding names are made unique or rejected instead of replacing data.
+
+Older `.aipbackup` JSON export/restore endpoints are no longer registered in the public REST surface. Use `.aipdb` download/import instead.
+
+## Console Sessions
+
+```txt
+POST   /api/console/exec
+GET    /api/console/sessions
+POST   /api/console/sessions
+GET    /api/console/sessions/{id}
+POST   /api/console/sessions/{id}/input
+POST   /api/console/sessions/{id}/close
+GET    /api/console/sessions/{id}/attach
+```
+
+`POST /api/console/exec` is a direct local web/API command endpoint kept for compatibility. The current Console UI uses persistent sessions instead.
+
+The backend owns the SSH shell. Browser and MCP clients attach to the same `session_id`; if the browser closes while Docker/backend keeps running, the shell and transcript remain in the backend. Recent transcript text is kept as a bounded session snapshot, while the persistent stream is also stored as append-only chunks for long-running sessions.
+
+Console websockets are locally hardened with bounded message size, client count, read deadlines, ping/pong keepalive, and lightweight input/resize frequency limits. These are abuse guardrails for the local gateway; they are not a remote multi-user quota system.
+
+`close_existing=true` closes any open shell for the same server and starts a new one. The UI New Session action uses this.
+
+Attach WebSocket messages from the server include:
+
+```json
+{ "type": "snapshot", "status": "connected", "data": "...", "session_id": 12 }
+{ "type": "ready", "status": "connected", "session_id": 12 }
+{ "type": "output", "status": "connected", "data": "..." }
+{ "type": "error", "data": "PTY error" }
+{ "type": "exit", "status": "closed", "data": "" }
+```
+
+Client messages include:
+
+```json
+{ "type": "input", "data": "ls\n" }
+{ "type": "resize", "cols": 120, "rows": 30 }
+```
+
+SSH connections use a gateway `known_hosts` file under the data path. The first unknown host key returns `409 unknown_ssh_host_key` with a SHA256 fingerprint. After the user approves that fingerprint, later mismatches are rejected.
+
+## MCP HTTP Endpoints
+
+The npm MCP bridge uses local credential-safe HTTP endpoints:
+
+```txt
+GET  /api/mcp/servers
+POST /api/mcp/exec
+GET  /api/mcp/requests/{id}
+GET  /api/mcp/requests
+GET  /api/mcp/console
+POST /api/mcp/messages
+```
+
+MCP endpoints authenticate with the API token. They reject revoked tokens and check token/server permissions.
+
+`GET /api/mcp/servers` returns only servers visible to that token and not blocked.
+
+The web UI also exposes `GET/PUT /api/settings/mcp-runtime` for the local user.
+That route is protected by the UI session and CSRF checks, not by MCP token auth.
+It controls whether new MCP command execution is currently Started or Stopped.
+Saved token/server permissions are preserved while stopped.
+
+`POST /api/mcp/exec` applies the execution rule:
+
+- `always_run`: run in the persistent console session
+- `approval_required`: create pending approval and return `approval_pending`
+- `blocked`: reject without execution
+- global stopped runtime: return `stopped` without execution
+
+For approval-required commands, the bridge should poll `get_request` according to `assistant_hint`. If the user clicks Run, the backend executes in the persistent console session. If the user clicks Decline, the request becomes `declined`.
+
+For long `always_run` commands, `/api/mcp/exec` may return `running` with `retry_after_seconds` and `assistant_hint`. The AI should poll `get_request(request_id)` and use `read_console(server_id)` for live output before sending another long-running command to the same server.
+
+## Approvals
+
+```txt
+GET  /api/approvals
+GET  /api/approvals/{id}
+POST /api/approvals/{id}/run
+POST /api/approvals/{id}/decline
+```
+
+`GET /api/approvals` returns recent command requests. Optional filters include `status` and `server_id`.
+
+The History page uses paginated search. `q` searches command text, reason, status, captured output, error, server name, and token name. Command text and output fields use SQLCipher-backed FTS4 indexes; server and token names remain regular filtered fields:
+
+```txt
+GET /api/approvals?paginated=true&limit=50&offset=0&q=docker&status=completed&server_id=3
+```
+
+The paginated response is an envelope:
+
+```json
+{
+  "items": [],
+  "total": 120,
+  "limit": 50,
+  "offset": 0,
+  "next_offset": 50
+}
+```
+
+Paginated list responses omit full stdout/stderr. `GET /api/approvals/{id}` returns the detail payload with captured output.
+
+Run changes a `pending_approval` request to `running` and starts execution in the backend-owned console session. The request later becomes `completed`, `failed`, or `error`.
+
+Decline changes the request to `declined`. The optional note is returned to MCP as `user_note`.
+
+## Messages
+
+```txt
+GET  /api/messages
+POST /api/messages
+POST /api/messages/read
+POST /api/mcp/messages
+```
+
+`POST /api/messages` creates a user-to-AI note:
+
+```json
+{
+  "token_id": 2,
+  "server_id": 3,
+  "session_id": 12,
+  "message": "Also inspect Docker logs on the next check."
+}
+```
+
+User-to-AI messages are token-scoped. If `server_id` is set, the note is consumed only by matching server responses. If `session_id` is also set, it is consumed only by MCP responses attached to that exact persistent console session. Generic notes can omit both `server_id` and `session_id`.
+
+`POST /api/mcp/messages` is authenticated with the MCP token and writes an AI-to-user message. If the message is attached to a server, the token must have permission for that server.
+
+Unread AI-to-user messages contribute to Console sidebar and server list badge counts. Opening the Messages drawer can mark matching messages as read.
+
+## Audit
+
+```txt
+GET /api/audit-logs
+GET /api/audit-logs/{id}
+```
+
+Returns paginated audit events. Optional filters include `q`, `actor`, and `server_id`. Audit action and payload search use SQLCipher-backed FTS4 indexes; server and token names remain regular filtered fields:
+
+```txt
+GET /api/audit-logs?limit=50&offset=0&q=docker&actor=mcp&server_id=3
+```
+
+List responses use the same pagination envelope as History and include a payload preview. `GET /api/audit-logs/{id}` returns the full payload.
+
+Token create/revoke, permission changes, security settings changes, retention cleanup, console lifecycle/input, MCP execution states, and approval decisions are written.
+
+Secret payloads, SSH private keys, and token values must not be written to audit logs.
+
+Command text is stored in audit/history records. Users should avoid putting secret values directly in command strings and should be cautious when printing files or environment output that may contain secrets.

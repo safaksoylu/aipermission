@@ -1,0 +1,54 @@
+name: Publish MCP Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run npm publish as a dry run"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish @aipermission/mcp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: packages/mcp/package-lock.json
+      - name: Install
+        working-directory: packages/mcp
+        run: npm ci
+      - name: Test
+        working-directory: packages/mcp
+        run: npm test
+      - name: Build
+        working-directory: packages/mcp
+        run: npm run build
+      - name: Pack dry run
+        working-directory: packages/mcp
+        run: npm pack --dry-run
+      - name: Publish dry run
+        if: inputs.dry_run == 'true'
+        working-directory: packages/mcp
+        run: npm publish --access public --provenance --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish
+        if: inputs.dry_run == 'false'
+        working-directory: packages/mcp
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

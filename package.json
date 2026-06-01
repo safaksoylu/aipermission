@@ -1,0 +1,16 @@
+{
+  "name": "aipermission-monorepo",
+  "private": true,
+  "description": "Local permission gateway for AI agents.",
+  "workspaces": [
+    "frontend",
+    "packages/mcp",
+    "packages/npm-placeholder"
+  ],
+  "scripts": {
+    "test": "make test",
+    "build": "make build",
+    "audit": "make audit",
+    "release-check": "make release-check"
+  }
+}

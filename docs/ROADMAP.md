@@ -1,0 +1,116 @@
+# Roadmap
+
+AIPermission is preparing its first public release candidate. The project is
+feature-complete for the local-only MVP; the remaining work is release
+packaging, final dogfooding, and small post-RC hardening.
+
+Related notes:
+
+- [What Is AIPermission?](whatis-aipermission.md)
+- [MVP Scope](mvp/scope.md)
+- [Use Cases](mvp/use-cases.md)
+- [Local Gateway](architecture/local-gateway.md)
+- [MCP Permission Flow](architecture/mcp-permission-flow.md)
+- [Credential Boundary](security/credential-boundary.md)
+- [Threat Model](security/threat-model.md)
+- [Project Principles](project-principles.md)
+
+## Current Status
+
+`0.1.0-rc.1` is code-complete for the first local developer workflow:
+
+- Docker Compose local runtime at `http://localhost:3210`.
+- SQLCipher encrypted named `.aipdb` databases.
+- Local UI session and CSRF protection for web REST mutations.
+- Gateway-owned SSH keys, SSH host fingerprint approval, and `known_hosts`
+  pinning.
+- Server inventory, server hints, SSH key install commands, and uninstall
+  cleanup.
+- MCP tokens with `always_run`, `approval_required`, and `blocked` execution
+  rules.
+- Token expiration, reusable-token opt-in, and global MCP Started/Stopped
+  switch.
+- Persistent console sessions with live attach, AI command display, messages,
+  transcript chunks, and history.
+- Approval dialogs, user notes, AI-to-user messages, audit logs, and searchable
+  History/Audit pages.
+- Redaction settings with built-in and custom regex rules.
+- MCP npm package, setup CLI, operator skill installer, and public package
+  metadata.
+- README screenshots, ADRs, security policy, contributing guide, release
+  checklist, CodeQL, Dependabot, tests, audits, and secret scan.
+
+## Project Boundaries
+
+AIPermission is intentionally:
+
+- Local-only.
+- Single-user.
+- Developer-focused.
+- SSH-based.
+- Human-in-the-loop.
+
+These requests conflict with the project principles and should normally be
+closed as `wontfix`:
+
+- Hosted SaaS mode.
+- Multi-tenant architecture.
+- Remote gateway hosting.
+- Shared team deployments.
+- LAN-accessible gateway mode.
+- Cloud-managed command execution.
+
+## Before Public RC
+
+- [ ] Create the clean public repository state on `main`.
+- [ ] Publish the organization profile repository `aipermission/.github`.
+- [ ] Apply the initial GitHub label set.
+- [ ] Run the release checklist from a clean clone.
+- [ ] Verify README screenshots render on GitHub.
+- [ ] Publish `@aipermission/mcp@0.1.0` with public npm access.
+- [ ] Publish the unscoped `aipermission` placeholder package after the npm
+  unpublish cooldown, using a new version such as `0.0.3`.
+- [ ] Create the `v0.1.0-rc.1` GitHub release.
+- [ ] Run one final real SSH/MCP dogfooding pass.
+
+## Early Post-RC
+
+These are good candidates for small follow-up releases after the first public
+tag:
+
+- [ ] Add permission expiration for temporary server access grants.
+- [ ] Add temporary `always_run` grants with visible countdowns in Console.
+- [ ] Add command policy/risk scoring primitives without turning the product
+  into a DevOps platform.
+- [ ] Add optional deny/warn rules for common high-risk command patterns.
+- [ ] Add structured manual command event parsing for History.
+- [ ] Add optional safety backup before import.
+- [ ] Add more Playwright browser tests for Settings, import, token permission,
+  and approval workflows.
+- [ ] Expand frontend component tests.
+- [ ] Add more MCP client setup examples as the client ecosystem changes.
+- [ ] Add a documented release cadence for small RC follow-up updates.
+- [ ] Open and maintain a visible good-first-issue pool.
+
+## Later Ideas
+
+These may be useful, but they are not required for the RC:
+
+- [ ] SQL query tools with explicit database credential boundaries.
+- [ ] Optional sensitive/no-persist console sessions.
+- [ ] Export filters for History and Audit data.
+- [ ] FTS5 search only if the SQLCipher driver/build supports it without
+  increasing install friction. The current release uses SQLCipher-compatible
+  FTS4 search.
+- [ ] Chunk retention and compaction controls for very long console sessions.
+
+## Maintenance Rules
+
+- After the first public tag, do not edit migration `1`; add migration `2+` for
+  schema changes.
+- Keep docs, UI copy, comments, and package metadata in English.
+- Keep README, SECURITY, ADRs, MCP docs, and REST docs aligned with the code.
+- Keep local-only warnings visible in public docs and release notes.
+- Keep `approval_required` as the recommended default for normal AI-assisted
+  work.
+- Keep screenshots current when the main UI changes.
