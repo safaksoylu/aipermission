@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aipermission-secret
+type: Opaque
+stringData:
+  AIPERMISSION_GATEWAY_SECRET: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aipermission-config
+data:
+  AIPERMISSION_FRONTEND_PORT: "3210"
+  AIPERMISSION_ALLOWED_ORIGINS: ""
+  AIPERMISSION_MCP_API_URL: ""
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aipermission
+spec:
+  type: ClusterIP
+  selector:
+    app: aipermission
+  ports:
+    - name: http
+      port: 3210
+      targetPort: 3210
+    - name: migration
+      port: 3211
+      targetPort: 3211
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: aipermission
+spec:
+  serviceName: aipermission
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aipermission
+  template:
+    metadata:
+      labels:
+        app: aipermission
+    spec:
+      imagePullSecrets:
+        - name: harbor-regcred
+      containers:
+        - name: frontend
+          image: harbor.yetwork.com/aipermission/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3210
+          env:
+            - name: AIPERMISSION_FRONTEND_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: aipermission-config
+                  key: AIPERMISSION_FRONTEND_PORT
+            - name: AIPERMISSION_MCP_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: aipermission-config
+                  key: AIPERMISSION_MCP_API_URL
+
+        - name: backend
+          image: harbor.yetwork.com/aipermission/backend:latest
+          imagePullPolicy: Always
+          env:
+            - name: AIPERMISSION_BACKEND_HOST
+              value: "127.0.0.1"
+            - name: AIPERMISSION_BACKEND_PORT
+              value: "8080"
+            - name: AIPERMISSION_DATA_PATH
+              value: "/app/data/aipermission.db"
+            - name: AIPERMISSION_GATEWAY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: aipermission-secret
+                  key: AIPERMISSION_GATEWAY_SECRET
+            - name: AIPERMISSION_FRONTEND_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: aipermission-config
+                  key: AIPERMISSION_FRONTEND_PORT
+            - name: AIPERMISSION_ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: aipermission-config
+                  key: AIPERMISSION_ALLOWED_ORIGINS
+          volumeMounts:
+            - name: aipermission-data
+              mountPath: /app/data
+
+        - name: migration
+          image: harbor.yetwork.com/aipermission/backend:latest
+          imagePullPolicy: Always
+          args:
+            - aipermission
+          ports:
+            - name: migration
+              containerPort: 3211
+          env:
+            - name: AIPERMISSION_MIGRATION_MODE
+              value: "1"
+            - name: AIPERMISSION_MIGRATION_HOST
+              value: "0.0.0.0"
+            - name: AIPERMISSION_MIGRATION_PORT
+              value: "3211"
+            - name: AIPERMISSION_DATA_PATH
+              value: "/app/data/aipermission.db"
+            - name: AIPERMISSION_GATEWAY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: aipermission-secret
+                  key: AIPERMISSION_GATEWAY_SECRET
+          volumeMounts:
+            - name: aipermission-data
+              mountPath: /app/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: aipermission-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
