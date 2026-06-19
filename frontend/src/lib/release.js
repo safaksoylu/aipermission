@@ -1,6 +1,60 @@
-export const appVersion = "0.2.5";
+export const appVersion = "0.2.7";
 
 export const changelogEntries = [
+  {
+    version: "0.2.7",
+    label: "Maintenance and backup providers",
+    sections: [
+      {
+        title: "Added",
+        items: [
+          "Settings now includes a local-only realtime Maintenance Console inside the gateway runtime.",
+          "Backup provider metadata can be managed from Settings with Google Drive as the first provider type.",
+          "Google Drive providers can be connected through a local device-code authorization flow.",
+          "Connected Google Drive providers can upload encrypted .aipdb snapshots and store local backup record metadata.",
+          "Google Drive backup records can be downloaded or restored as a new local database from Settings.",
+          "Remote backup uploads show the encrypted snapshot size before the upload starts.",
+        ],
+      },
+      {
+        title: "Security",
+        items: [
+          "Maintenance Console is local UI only, unavailable to MCP, and audits terminal lifecycle events.",
+          "Backup providers are storage metadata only: they do not receive MCP tokens, connector credentials, or the database password.",
+          "Google Drive OAuth tokens are encrypted with the local vault and are never returned by provider list/detail responses.",
+          "Google Drive uploads send encrypted .aipdb snapshots only; database passwords and connector credentials are not uploaded.",
+          "Google Drive restores verify stored size/checksum metadata and never overwrite the currently open database.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "0.2.6",
+    label: "RabbitMQ connector",
+    sections: [
+      {
+        title: "Added",
+        items: [
+          "RabbitMQ is now a built-in connector with Direct and Over SSH connection modes.",
+          "RabbitMQ actions cover overview metadata, vhost listing, bounded queue lists, queue details, bindings, bounded message peeking with requeue, and explicit message publishing.",
+          "RabbitMQ Console adds a queue browser with counters, binding inspection, message preview panels, and a write-scoped publish panel.",
+          "Connector target forms can run four direct or Over SSH host reachability checks before saving.",
+        ],
+      },
+      {
+        title: "Changed",
+        items: [
+          "Direct connector targets can use host.docker.internal to reach services running on the same Linux host as AIPermission Docker.",
+        ],
+      },
+      {
+        title: "Security",
+        items: [
+          "RabbitMQ message preview is bounded by count and payload truncation limits. publish_message is a separate write action; destructive queue operations are intentionally not part of this MVP.",
+        ],
+      },
+    ],
+  },
   {
     version: "0.2.5",
     label: "Postgres over SSH",

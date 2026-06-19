@@ -23,6 +23,7 @@ type connectorHandlers struct{ *Server }
 type connectorTargetHandlers struct{ *Server }
 type targetHandlers struct{ *Server }
 type mcpHandlers struct{ *Server }
+type maintenanceConsoleHandlers struct{ *Server }
 
 func (s *Server) routes() {
 	unlock := unlockHandlers{s}
@@ -45,6 +46,7 @@ func (s *Server) routes() {
 	connectorTargets := connectorTargetHandlers{s}
 	targets := targetHandlers{s}
 	mcp := mcpHandlers{s}
+	maintenanceConsole := maintenanceConsoleHandlers{s}
 
 	s.mux.HandleFunc("GET /health", s.health)
 	s.mux.HandleFunc("GET /api/status", s.status)
@@ -57,6 +59,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/settings/redaction-rules", redactionRules.createRedactionRule)
 	s.mux.HandleFunc("PUT /api/settings/redaction-rules/{id}", redactionRules.updateRedactionRule)
 	s.mux.HandleFunc("DELETE /api/settings/redaction-rules/{id}", redactionRules.deleteRedactionRule)
+	s.mux.HandleFunc("GET /api/settings/maintenance-console/status", maintenanceConsole.status)
+	s.mux.HandleFunc("POST /api/settings/maintenance-console/open", maintenanceConsole.open)
+	s.mux.HandleFunc("GET /api/settings/maintenance-console/attach", maintenanceConsole.attach)
+	s.mux.HandleFunc("POST /api/settings/maintenance-console/close", maintenanceConsole.close)
 	s.mux.HandleFunc("GET /api/unlock/status", unlock.unlockStatus)
 	s.mux.HandleFunc("POST /api/unlock/setup", unlock.setupUnlock)
 	s.mux.HandleFunc("POST /api/unlock", unlock.unlock)
@@ -75,6 +81,17 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/tokens/{id}/connector-permissions", tokens.updateTokenConnectorPermissions)
 	s.mux.HandleFunc("GET /api/backup/download", backup.downloadDatabase)
 	s.mux.HandleFunc("POST /api/backup/import", backup.importDatabase)
+	s.mux.HandleFunc("GET /api/backup/providers/catalog", backup.providerCatalog)
+	s.mux.HandleFunc("GET /api/backup/providers", backup.listProviders)
+	s.mux.HandleFunc("POST /api/backup/providers", backup.createProvider)
+	s.mux.HandleFunc("PUT /api/backup/providers/{id}", backup.updateProvider)
+	s.mux.HandleFunc("DELETE /api/backup/providers/{id}", backup.deleteProvider)
+	s.mux.HandleFunc("GET /api/backup/providers/{id}/records", backup.listProviderRecords)
+	s.mux.HandleFunc("POST /api/backup/providers/{id}/upload", backup.uploadProviderBackup)
+	s.mux.HandleFunc("GET /api/backup/providers/{id}/records/{record_id}/download", backup.downloadProviderRecord)
+	s.mux.HandleFunc("POST /api/backup/providers/{id}/records/{record_id}/restore", backup.restoreProviderRecord)
+	s.mux.HandleFunc("POST /api/backup/providers/{id}/google/device/start", backup.startGoogleDeviceFlow)
+	s.mux.HandleFunc("POST /api/backup/providers/{id}/google/device/poll", backup.pollGoogleDeviceFlow)
 	s.mux.HandleFunc("POST /api/databases/rename", databases.renameDatabase)
 	s.mux.HandleFunc("POST /api/databases/delete", databases.deleteDatabase)
 	s.mux.HandleFunc("POST /api/databases/delete-locked", databases.deleteLockedDatabase)
@@ -128,6 +145,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/connector-targets/inventory", connectorTargets.listConnectorTargetInventory)
 	s.mux.HandleFunc("POST /api/connector-targets/with-profile", connectorTargets.createConnectorTargetWithProfile)
 	s.mux.HandleFunc("POST /api/connector-targets", connectorTargets.createConnectorTarget)
+	s.mux.HandleFunc("POST /api/connector-targets/ping", connectorTargets.pingConnectorTargetHost)
 	s.mux.HandleFunc("POST /api/connector-targets/test", connectorTargets.testConnectorTargetDraft)
 	s.mux.HandleFunc("GET /api/connector-targets/{id}", connectorTargets.getConnectorTarget)
 	s.mux.HandleFunc("PUT /api/connector-targets/{id}/with-profile/{profile_id}", connectorTargets.updateConnectorTargetWithProfile)

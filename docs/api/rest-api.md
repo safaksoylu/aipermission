@@ -59,6 +59,7 @@ GET /api/connector-targets
 GET /api/connector-targets/inventory
 POST /api/connector-targets/with-profile
 POST /api/connector-targets
+POST /api/connector-targets/ping
 POST /api/connector-targets/test
 GET /api/connector-targets/{id}
 PUT /api/connector-targets/{id}/with-profile/{profile_id}
@@ -200,6 +201,25 @@ route is implemented for the SSH adapter because host-key approval and
 gateway-managed key selection happen before the target is saved. Other
 connectors should normally use saved profile tests through
 `POST /api/connector-targets/{id}/profiles/{profile_id}/test`.
+
+`POST /api/connector-targets/ping` runs four bounded TCP reachability checks
+from the selected connection mode. This is a local UI helper for connector forms
+and does not use credential secrets or connector action permissions. It checks
+the service port, not ICMP ping:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 5432,
+  "mode": "over_ssh",
+  "transport_target_ref": "ssh:3:5",
+  "attempts": 4
+}
+```
+
+When `mode=over_ssh`, the TCP checks are dialed through the referenced SSH
+connector profile so the result matches what Redis, Postgres, RabbitMQ, or a
+future TCP-backed connector would see from that SSH target.
 
 `POST /api/connector-targets/{id}/operations/docker-check` runs a read-only,
 on-demand Docker status command through the SSH connector adapter. It does not
@@ -722,6 +742,10 @@ GET    /api/settings/redaction-rules
 POST   /api/settings/redaction-rules
 PUT    /api/settings/redaction-rules/{id}
 DELETE /api/settings/redaction-rules/{id}
+GET    /api/settings/maintenance-console/status
+POST   /api/settings/maintenance-console/open
+GET    /api/settings/maintenance-console/attach
+POST   /api/settings/maintenance-console/close
 ```
 
 Token create returns the token value once. `expires_at` is optional and must be
@@ -785,6 +809,14 @@ Retention settings:
 
 Valid targets are `history`, `audit`, `console`, and `messages`.
 
+The maintenance console is a local UI-only realtime PTY for diagnostics inside
+the gateway runtime container. It is protected by the normal local HTTP
+boundary, UI session, and CSRF checks, is not exposed through MCP, and uses the
+same browser terminal component as SSH console sessions. The API exposes
+`open`, websocket `attach`, and `close`; lifecycle events are audited, but the
+terminal transcript is kept as bounded in-memory UI state rather than stored as
+command history.
+
 Connector permission update shape:
 
 Supported execution rules:
@@ -829,6 +861,17 @@ permission checks no longer treat them as effective.
 ```txt
 GET  /api/backup/download
 POST /api/backup/import
+GET  /api/backup/providers/catalog
+GET  /api/backup/providers
+POST /api/backup/providers
+PUT  /api/backup/providers/{id}
+DELETE /api/backup/providers/{id}
+GET  /api/backup/providers/{id}/records
+POST /api/backup/providers/{id}/upload
+GET  /api/backup/providers/{id}/records/{record_id}/download
+POST /api/backup/providers/{id}/records/{record_id}/restore
+POST /api/backup/providers/{id}/google/device/start
+POST /api/backup/providers/{id}/google/device/poll
 ```
 
 `GET /api/backup/download` returns the active SQLCipher database as a binary `.aipdb` file. The backend creates a temporary SQLCipher snapshot and serves that snapshot instead of streaming the live database file directly.
@@ -846,6 +889,38 @@ The multipart field name must be `sqlite`. JSON/base64 database import is not su
 Import can run while locked. The backend validates the uploaded database with the provided password, stores it as a named local database, and unlocks it. Import never overwrites an existing database file; colliding names are made unique or rejected instead of replacing data.
 
 Older `.aipbackup` JSON export/restore endpoints are no longer registered in the public REST surface. Use `.aipdb` download/import instead.
+
+Backup provider endpoints store optional remote encrypted-backup provider
+metadata. Provider secrets are encrypted with the local gateway vault and are
+never returned by list/detail responses. The first provider type is
+`google_drive`; it supports a local UI initiated Google OAuth device flow using
+a user-provided OAuth client id stored in provider public metadata and a client
+secret stored only as encrypted provider secret. Use a Google Cloud OAuth client
+for TVs and limited-input devices with Google Drive API enabled. The resulting
+Google token payload is stored only as encrypted provider secret. Later provider
+types should use the same metadata and secret contract instead of adding one-off
+Settings storage.
+
+Remote provider records are metadata only. A provider account stores encrypted
+`.aipdb` blobs as-is; it is not a remote gateway, does not receive MCP tokens,
+does not receive connector credentials, and cannot decrypt a database without
+the database password.
+
+`POST /api/backup/providers/{id}/upload` creates a temporary SQLCipher snapshot
+of the currently unlocked database, uploads that encrypted `.aipdb` file to the
+connected provider, and stores a local backup record with provider file id,
+filename, size, checksum, source machine, and timestamps. Google Drive uploads
+use the connected OAuth token, refresh it locally when possible, create the
+configured Drive folder when missing, and never upload the database password.
+
+`GET /api/backup/providers/{id}/records/{record_id}/download` downloads a
+previously uploaded encrypted `.aipdb` backup record from the provider after
+checking the stored size and checksum metadata.
+
+`POST /api/backup/providers/{id}/records/{record_id}/restore` downloads the
+remote encrypted `.aipdb`, verifies the size/checksum metadata, validates the
+provided database password, and imports it as a new local database. Restore
+never overwrites the currently open database.
 
 ## Console Sessions
 
@@ -1105,7 +1180,7 @@ GET /api/audit-logs?limit=50&offset=0&q=docker&actor=mcp&runtime_id=3
 
 List responses use the same pagination envelope as History and include a payload preview. `GET /api/audit-logs/{id}` returns the full payload.
 
-Token create/revoke, permission changes, security settings changes, retention cleanup, console lifecycle/input, MCP execution states, and approval decisions are written.
+Token create/revoke, permission changes, security settings changes, retention cleanup, maintenance console lifecycle, connector console lifecycle/input, MCP execution states, and approval decisions are written.
 
 Secret payloads, SSH private keys, and token values must not be written to audit logs.
 

@@ -2,14 +2,14 @@ import { Field, Input, Select } from "../../../components/ui/form";
 import { Notice } from "../../../components/ui/notice";
 import { HostPingButton } from "../host-ping-button";
 
-export function PostgresConnectorFormTemplate({ form, mode = "create", targets = [], onChange }) {
+export function RabbitMQConnectorFormTemplate({ form, mode = "create", targets = [], onChange }) {
   const editing = mode === "edit";
   const sshProfiles = sshProfileOptions(targets);
   const overSSH = form.connection_mode === "over_ssh";
   return (
     <>
       <Notice tone="good">
-        The first Postgres credential profile is stored encrypted. Use a dedicated read-only database role for AI access.
+        RabbitMQ uses the Management API, not the AMQP listener. Use the port from the management URL, usually 15672, and start with Prompt permissions for message peeking.
       </Notice>
       <Field>
         Connector name
@@ -39,41 +39,37 @@ export function PostgresConnectorFormTemplate({ form, mode = "create", targets =
       ) : null}
       {overSSH ? (
         <Notice>
-          Host and port are resolved from the SSH server. Use 127.0.0.1:5432 when Postgres only listens on the remote machine.
+          Host and port are resolved from the SSH server. Use 127.0.0.1:15672 when RabbitMQ Management only listens on the remote machine; do not use the AMQP port.
         </Notice>
       ) : (
         <Notice>
-          For Postgres running on the same Linux host as AIPermission Docker, use host.docker.internal instead of localhost.
+          For RabbitMQ Management running on the same Linux host as AIPermission Docker, use host.docker.internal instead of localhost.
         </Notice>
       )}
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+      <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)_120px]">
+        <Field>
+          Scheme
+          <Select value={form.scheme || "http"} onChange={(event) => onChange("scheme", event.target.value)}>
+            <option value="http">HTTP</option>
+            <option value="https">HTTPS</option>
+          </Select>
+        </Field>
         <Field>
           <span className="flex items-center justify-between gap-2">
-            <span>Host</span>
+            <span>Management host</span>
             <HostPingButton host={form.host} port={form.port} mode={form.connection_mode} transportTargetRef={form.transport_target_ref} />
           </span>
           <Input value={form.host} onChange={(event) => onChange("host", event.target.value)} required />
         </Field>
         <Field>
-          Port
-          <Input type="number" min="1" max="65535" value={form.port} onChange={(event) => onChange("port", event.target.value)} required />
+          Management API port
+          <Input type="number" min="1" max="65535" value={form.port} onChange={(event) => onChange("port", event.target.value)} placeholder="15672" required />
         </Field>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
-        <Field>
-          Database
-          <Input value={form.database} onChange={(event) => onChange("database", event.target.value)} required />
-        </Field>
-        <Field>
-          SSL mode
-          <Select value={form.ssl_mode} onChange={(event) => onChange("ssl_mode", event.target.value)}>
-            <option value="require">Require</option>
-            <option value="verify_full">Verify full</option>
-            <option value="prefer">Prefer</option>
-            <option value="disable">Disable</option>
-          </Select>
-        </Field>
-      </div>
+      <Field>
+        Default vhost
+        <Input value={form.vhost} onChange={(event) => onChange("vhost", event.target.value)} placeholder="/" />
+      </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field>
           Profile label
@@ -86,7 +82,7 @@ export function PostgresConnectorFormTemplate({ form, mode = "create", targets =
       </div>
       <Field>
         Username
-        <Input value={form.username} onChange={(event) => onChange("username", event.target.value)} autoComplete="off" required />
+        <Input value={form.username} onChange={(event) => onChange("username", event.target.value)} autoComplete="off" placeholder="RabbitMQ Management API username" required />
       </Field>
       <Field>
         Password
@@ -95,8 +91,8 @@ export function PostgresConnectorFormTemplate({ form, mode = "create", targets =
           value={form.password}
           onChange={(event) => onChange("password", event.target.value)}
           autoComplete="new-password"
-          placeholder={editing ? "Leave blank to keep the current encrypted password" : ""}
           required={!editing}
+          placeholder={editing ? "Leave blank to keep the current encrypted password" : "RabbitMQ Management API password"}
         />
       </Field>
     </>
