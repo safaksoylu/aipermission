@@ -7,13 +7,33 @@ set -Eeuo pipefail
 # --------------------------------------------------
 
 FORK_REPO="git@github.com:safaksoylu/aipermission.git"
-UPSTREAM_REPO="https://github.com:aipermission/aipermission.git"
+UPSTREAM_REPO="git@github.com:aipermission/aipermission.git"
 
 BRANCH="main"
 SYNC_BRANCH="automatic-upstream-sync"
-WORK_DIR="${HOME}/Projects/safaksoylu-git/aipermission"
 
 LOCK_FILE="/tmp/fork-sync-FORK_REPO.lock"
+
+usage() {
+    printf 'Kullanım: %s [calisma-dizini]\n' "$(basename "$0")"
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if (( $# > 1 )); then
+    usage >&2
+    exit 64
+fi
+
+WORK_DIR="${1:-$PWD}"
+WORK_DIR_WAS_PROVIDED=0
+
+if (( $# == 1 )); then
+    WORK_DIR_WAS_PROVIDED=1
+fi
 
 log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -47,12 +67,32 @@ if ! flock -n 9; then
     exit 0
 fi
 
-mkdir -p "$(dirname "$WORK_DIR")"
+if [[ -e "$WORK_DIR" && ! -d "$WORK_DIR" ]]; then
+    log "Çalışma dizini bir klasör değil: ${WORK_DIR}"
+    exit 1
+fi
 
-# Repository daha önce klonlanmadıysa fork'u klonla.
-if [[ ! -d "${WORK_DIR}/.git" ]]; then
+if git -C "$WORK_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    WORK_DIR="$(git -C "$WORK_DIR" rev-parse --show-toplevel)"
+
+    if (( WORK_DIR_WAS_PROVIDED == 0 )); then
+        log "Çalışma dizini belirtilmedi; mevcut git repository kullanılacak: ${WORK_DIR}"
+    fi
+elif (( WORK_DIR_WAS_PROVIDED == 1 )); then
+    if [[ -d "$WORK_DIR" && -n "$(find "$WORK_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+        log "Belirtilen çalışma dizini boş değil ve git repository değil: ${WORK_DIR}"
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$WORK_DIR")"
+
+    # Repository daha önce klonlanmadıysa fork'u klonla.
     log "Fork repository klonlanıyor..."
     git clone "$FORK_REPO" "$WORK_DIR"
+else
+    log "Çalışma dizini belirtilmedi; mevcut dizin kullanılacak: ${WORK_DIR}"
+    log "Mevcut dizin git repository değil. Dizin parametresi verin veya script'i repository içinde çalıştırın."
+    exit 1
 fi
 
 cd "$WORK_DIR"
