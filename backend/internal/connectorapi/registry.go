@@ -169,7 +169,7 @@ type LiveConsoleTargetAdapter interface {
 // LiveConsoleTransportAdapter opens a connector-owned persistent runtime for
 // the generic live console manager.
 type LiveConsoleTransportAdapter interface {
-	OpenLiveConsole(ctx context.Context, server GatewayServer, runtime GatewayRuntime, runtimeID int64, rows int, cols int) (*console.RuntimeSession, error)
+	OpenLiveConsole(ctx context.Context, server GatewayServer, runtime GatewayRuntime, runtimeID int64, rows int, cols int, params map[string]any) (*console.RuntimeSession, error)
 }
 
 // TCPTransportAdapter lets one connector provide a reviewed TCP transport for
@@ -178,6 +178,13 @@ type LiveConsoleTransportAdapter interface {
 // setup; the caller connector owns the protocol spoken over the returned conn.
 type TCPTransportAdapter interface {
 	DialConnectorTCP(ctx context.Context, server GatewayServer, runtime GatewayRuntime, targetRef string, network string, address string) (net.Conn, error)
+}
+
+// CommandTransportAdapter lets one connector run a bounded command template
+// through another connector-owned transport without exposing connector-specific
+// material to core or to the caller.
+type CommandTransportAdapter interface {
+	RunConnectorCommand(ctx context.Context, server GatewayServer, runtime GatewayRuntime, targetRef string, command string) (connectors.CommandRunResult, error)
 }
 
 type TransferProgress func(transferred int64, total int64)

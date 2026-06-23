@@ -1,6 +1,61 @@
-export const appVersion = "0.2.7";
+export const appVersion = "0.2.9";
 
 export const changelogEntries = [
+  {
+    version: "0.2.9",
+    label: "Docker inventory and images",
+    sections: [
+      {
+        title: "Added",
+        items: [
+          "Docker connector actions now include scoped image, network, and volume inventory reads.",
+          "Docker Console adds inventory tabs for Containers, Images, Networks, and Volumes with searchable metadata and raw JSON copy views.",
+          "Container lists now surface health and Docker Compose project/service metadata when Docker exposes it.",
+          "Docker connector actions now include scoped container_exec for bounded non-interactive commands inside one visible container.",
+          "Docker Console can open a live terminal inside a selected container using the same xterm experience as SSH console.",
+          "Release tags now publish backend and frontend container images to GitHub Container Registry.",
+          "A new docker-compose.release.yml file lets users pull published images instead of building locally.",
+        ],
+      },
+      {
+        title: "Security",
+        items: [
+          "Selected Docker credential profiles only expose images used by visible containers, and derive networks/volumes from scoped container inspect data.",
+          "Prebuilt-image Compose keeps ports bound to 127.0.0.1 and does not change the local-only gateway boundary.",
+          "Docker container_exec and live container console are scoped to one visible container; arbitrary host-level Docker commands, removal, prune, and raw Docker command execution remain unavailable.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "0.2.8",
+    label: "Docker connector",
+    sections: [
+      {
+        title: "Added",
+        items: [
+          "Docker is now a built-in connector that runs bounded Docker CLI templates through an SSH transport profile.",
+          "Docker actions cover version metadata, scoped container listing, redacted inspect metadata, bounded log tails, and explicit start/stop/restart lifecycle operations.",
+          "Docker Console adds a profile-scoped container browser with logs, inspect output, and lifecycle confirmation dialogs.",
+          "Docker credential profiles can scope a token to all containers, selected container names/IDs, or name patterns.",
+        ],
+      },
+      {
+        title: "Changed",
+        items: [
+          "Connectors can now use a generic command transport capability for reviewed command templates without importing SSH-specific code.",
+        ],
+      },
+      {
+        title: "Security",
+        items: [
+          "Docker does not expose arbitrary docker exec, container/image removal, prune, shell, or raw Docker command execution in this MVP.",
+          "Docker inspect output masks container environment values before returning structured output.",
+          "Container-targeted Docker actions resolve the requested container and enforce the credential profile scope before execution.",
+        ],
+      },
+    ],
+  },
   {
     version: "0.2.7",
     label: "Maintenance and backup providers",
