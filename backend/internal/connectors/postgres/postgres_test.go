@@ -9,6 +9,7 @@ import (
 
 	"github.com/aipermission/aipermission/backend/internal/connectors"
 	"github.com/aipermission/aipermission/backend/internal/connectors/connectortest"
+	"github.com/jackc/pgx/v5"
 )
 
 func TestConnectorMetadataAndSchemas(t *testing.T) {
@@ -344,6 +345,22 @@ func TestExecuteActionValidatesTargetConfigBeforeDial(t *testing.T) {
 	}, connectors.PreparedAction{ActionName: ActionQueryReadonly, Payload: map[string]any{"sql": "select 1"}})
 	if !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("expected ErrInvalidConfig, got %v", err)
+	}
+}
+
+func TestPostgresConnectionConfigDisablesStatementCache(t *testing.T) {
+	config, err := postgresConnectionConfig("postgres://app:secret@127.0.0.1:5432/app?sslmode=disable")
+	if err != nil {
+		t.Fatalf("postgres connection config: %v", err)
+	}
+	if config.DefaultQueryExecMode != pgx.QueryExecModeExec {
+		t.Fatalf("default query exec mode = %v", config.DefaultQueryExecMode)
+	}
+	if config.StatementCacheCapacity != 0 {
+		t.Fatalf("statement cache capacity = %d", config.StatementCacheCapacity)
+	}
+	if config.DescriptionCacheCapacity != 0 {
+		t.Fatalf("description cache capacity = %d", config.DescriptionCacheCapacity)
 	}
 }
 
