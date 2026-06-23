@@ -836,7 +836,7 @@ func connectPostgres(ctx context.Context, runtime connectors.RuntimeContext, rea
 	query.Set("connect_timeout", "10")
 	connURL.RawQuery = query.Encode()
 
-	config, err := pgx.ParseConfig(connURL.String())
+	config, err := postgresConnectionConfig(connURL.String())
 	if err != nil {
 		return nil, fmt.Errorf("parse postgres connection config: %w", err)
 	}
@@ -858,6 +858,17 @@ func connectPostgres(ctx context.Context, runtime connectors.RuntimeContext, rea
 		return nil, err
 	}
 	return conn, nil
+}
+
+func postgresConnectionConfig(connString string) (*pgx.ConnConfig, error) {
+	config, err := pgx.ParseConfig(connString)
+	if err != nil {
+		return nil, err
+	}
+	config.DefaultQueryExecMode = pgx.QueryExecModeExec
+	config.StatementCacheCapacity = 0
+	config.DescriptionCacheCapacity = 0
+	return config, nil
 }
 
 func configurePostgresSession(ctx context.Context, conn *pgx.Conn) error {
