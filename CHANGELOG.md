@@ -7,6 +7,65 @@ and this project uses semantic versioning once public releases begin.
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-06-23
+
+### Added
+
+- Added Docker inventory actions for scoped image, network, and volume reads.
+- Added Docker Console inventory tabs for Containers, Images, Networks, and
+  Volumes, with searchable metadata and raw JSON copy/search views.
+- Added Docker container health and Docker Compose project/service metadata to
+  scoped container list output when Docker labels/status expose it.
+- Added scoped `container_exec` for bounded non-interactive commands inside one
+  visible container.
+- Added live Docker container console sessions that reuse the same terminal
+  component as SSH console while entering a selected container through the
+  configured SSH transport profile.
+- Added a tag-triggered GitHub Actions workflow for publishing ready-to-run
+  backend and frontend images to GitHub Container Registry.
+- Added `docker-compose.release.yml` for users who want to pull published images
+  instead of building from source.
+
+### Security
+
+- Selected Docker credential profiles only expose images used by visible
+  containers, and derive networks/volumes from scoped container inspect output.
+- Prebuilt-image Compose keeps the UI port bound to `127.0.0.1` and does not
+  change AIPermission's local-only gateway boundary.
+- Docker `container_exec` and live container console are scoped to one visible
+  container. Docker still does not expose arbitrary host-level Docker commands,
+  container/image removal, prune, or raw Docker command execution.
+
+## [0.2.8] - 2026-06-23
+
+### Added
+
+- Added Docker as a built-in connector that runs bounded Docker CLI templates
+  through an SSH transport profile.
+- Added Docker actions for version metadata, scoped container listing, redacted
+  inspect metadata, bounded log tails, and explicit start/stop/restart lifecycle
+  operations.
+- Added a Docker Console container browser with profile-scoped container lists,
+  logs, inspect output, and lifecycle confirmation dialogs.
+- Added Docker credential profile scopes so a token can be limited to all
+  containers, selected container names/IDs, or name patterns.
+
+### Changed
+
+- Added a generic connector command transport capability so structured
+  connectors can run reviewed command templates through connector transports
+  without importing SSH-specific code.
+
+### Security
+
+- Docker does not expose arbitrary `docker exec`, container/image removal,
+  prune, shell, or raw Docker command execution in the 0.2.8 MVP.
+- Docker inspect output masks container environment values before returning
+  structured output to UI, MCP, history, or audit.
+- Container-targeted Docker actions resolve the requested container first and
+  enforce the credential profile scope before reading logs, inspecting metadata,
+  or running lifecycle changes.
+
 ## [0.2.7] - 2026-06-19
 
 ### Added
